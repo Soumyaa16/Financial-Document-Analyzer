@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Document Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --surface: #ffffff;
+    --dark: #0f0f0f;
+    --accent: #1a472a;
+    --accent-light: #2d6a4f;
+    --gold: #c9a84c;
+    --gold-light: #e8d5a3;
+    --border: #e2ddd5;
+    --text: #1a1a1a;
+    --muted: #7a7570;
+    --success: #1a472a;
+    --error: #8b1a1a;
+    --pending: #5c4a1a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+  }
+
+  /* Subtle paper texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  header {
+    background: var(--dark);
+    padding: 0 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.02em;
+  }
+  .logo span { color: var(--gold); }
+
+  .header-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: #666;
+    letter-spacing: 0.08em;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #3d9970;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Main layout */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    margin-bottom: 3.5rem;
+    animation: fadeUp 0.6s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-eyebrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--gold-light);
+    padding-bottom: 4px;
+  }
+
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--dark);
+    margin-bottom: 1rem;
+  }
+
+  .hero p {
+    font-size: 0.95rem;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 2.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03);
+    animation: fadeUp 0.6s ease both;
+  }
+  .card:nth-child(2) { animation-delay: 0.1s; }
+  .card:nth-child(3) { animation-delay: 0.2s; }
+
+  .card-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 2px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: #f0f5f2;
+  }
+  .upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .upload-icon {
+    width: 44px; height: 44px;
+    margin: 0 auto 1rem;
+    background: var(--dark);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .upload-icon svg { width: 20px; height: 20px; stroke: var(--gold); fill: none; stroke-width: 1.5; }
+
+  .upload-zone h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .upload-zone p { font-size: 0.8rem; color: var(--muted); }
+
+  .file-selected {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    background: #f0f5f2;
+    border: 1px solid #c5ddd0;
+    padding: 0.75rem 1rem;
+    border-radius: 2px;
+    font-size: 0.82rem;
+    margin-bottom: 1.5rem;
+  }
+  .file-selected.show { display: flex; }
+  .file-icon { font-size: 1.2rem; }
+  .file-name { font-weight: 500; color: var(--accent); flex: 1; }
+  .file-remove {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 1rem;
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+  }
+
+  /* Query input */
+  .input-group { margin-bottom: 1.5rem; }
+  .input-group label {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .input-group textarea {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    color: var(--text);
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    border-radius: 2px;
+    transition: border-color 0.2s;
+    line-height: 1.6;
+  }
+  .input-group textarea:focus { border-color: var(--accent); }
+  .input-group textarea::placeholder { color: #bbb; }
+
+  /* Submit button */
+  .btn-primary {
+    width: 100%;
+    padding: 1rem;
+    background: var(--dark);
+    color: #fff;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Progress / status */
+  .status-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 2px;
+    animation: fadeUp 0.4s ease both;
+  }
+  .status-card.show { display: block; }
+
+  .status-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .status-spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status-spinner.done {
+    border: 2px solid var(--accent);
+    animation: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .status-spinner.done::after { content: '✓'; color: var(--accent); font-size: 0.9rem; }
+  .status-spinner.failed {
+    border: 2px solid var(--error);
+    animation: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .status-spinner.failed::after { content: '✗'; color: var(--error); font-size: 0.9rem; }
+
+  .status-text h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
+  .status-text p { font-size: 0.78rem; color: var(--muted); }
+
+  .job-id-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg);
+    padding: 0.6rem 0.9rem;
+    border-radius: 2px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: monospace;
+  }
+  .job-id-label { color: var(--gold); font-weight: 600; font-family: 'DM Sans', sans-serif; }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    margin: 1.2rem 0;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.4s ease;
+    border-radius: 1px;
+  }
+  .progress-fill.indeterminate {
+    width: 40%;
+    animation: indeterminate 1.4s ease-in-out infinite;
+  }
+  @keyframes indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  /* Result */
+  .result-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    animation: fadeUp 0.5s ease both;
+    margin-bottom: 1.5rem;
+  }
+  .result-card.show { display: block; }
+
+  .result-header {
+    background: var(--dark);
+    padding: 1.2rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .result-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .result-header .result-meta {
+    font-size: 0.7rem;
+    color: #666;
+    letter-spacing: 0.06em;
+  }
+
+  .result-body { padding: 2rem 2.5rem; }
+
+  .result-section {
+    margin-bottom: 1.8rem;
+    padding-bottom: 1.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  .result-section-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 0.8rem;
+    font-weight: 500;
+  }
+
+  .result-text {
+    font-size: 0.875rem;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 0.8rem;
+  }
+  .metric-item {
+    background: var(--surface);
+    padding: 1rem 1.2rem;
+  }
+  .metric-label { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 0.3rem; }
+  .metric-value { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; color: var(--dark); }
+  .metric-value.down { color: var(--error); }
+  .metric-value.up { color: var(--success); }
+
+  .raw-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    font-family: 'DM Sans', sans-serif;
+    width: 100%;
+    text-align: left;
+    letter-spacing: 0.06em;
+  }
+  .raw-toggle:hover { color: var(--text); }
+
+  .raw-output {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 1.2rem;
+    font-size: 0.75rem;
+    font-family: monospace;
+    line-height: 1.6;
+    color: var(--muted);
+    white-space: pre-wrap;
+    margin-top: 0.8rem;
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 2px;
+  }
+  .raw-output.show { display: block; }
+
+  /* New analysis button */
+  .btn-secondary {
+    padding: 0.65rem 1.4rem;
+    background: transparent;
+    color: var(--dark);
+    border: 1px solid var(--dark);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { background: var(--dark); color: #fff; }
+
+  /* Error state */
+  .error-banner {
+    display: none;
+    background: #fdf2f2;
+    border: 1px solid #e8c5c5;
+    padding: 1rem 1.5rem;
+    border-radius: 2px;
+    font-size: 0.82rem;
+    color: var(--error);
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.3s ease both;
+  }
+  .error-banner.show { display: block; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Financial <span>Analyst</span></div>
+  <div class="header-badge">
+    <div class="status-dot"></div>
+    <span>API ONLINE</span>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <span class="hero-eyebrow">AI-Powered Analysis</span>
+    <h1>Financial Document<br>Intelligence</h1>
+    <p>Upload any financial report, earnings statement, or investment document and receive institutional-grade analysis in minutes.</p>
+  </div>
+
+  <!-- Upload Form -->
+  <div class="card" id="form-card">
+    <div class="card-label">01 — Upload Document</div>
+
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept=".pdf" />
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      </div>
+      <h3>Drop your PDF here</h3>
+      <p>or click to browse — PDF files only</p>
+    </div>
+
+    <div class="file-selected" id="file-selected">
+      <span class="file-icon">📄</span>
+      <span class="file-name" id="file-name-display"></span>
+      <button class="file-remove" id="file-remove" title="Remove file">✕</button>
+    </div>
+
+    <div class="input-group">
+      <label>Analysis Query</label>
+      <textarea id="query-input" placeholder="Analyze this financial document for investment insights...">Analyze this financial document for investment insights</textarea>
+    </div>
+
+    <button class="btn-primary" id="submit-btn" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      Submit for Analysis
+    </button>
+  </div>
+
+  <!-- Error -->
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- Status -->
+  <div class="status-card" id="status-card">
+    <div class="status-header">
+      <div class="status-spinner" id="status-spinner"></div>
+      <div class="status-text">
+        <h3 id="status-title">Queuing document...</h3>
+        <p id="status-subtitle">Your document has been received</p>
+      </div>
+    </div>
+    <div class="job-id-row">
+      <span class="job-id-label">JOB</span>
+      <span id="job-id-display">—</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill indeterminate" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="result-card">
+    <div class="result-header">
+      <h2>Analysis Complete</h2>
+      <span class="result-meta" id="result-meta"></span>
+    </div>
+    <div class="result-body" id="result-body">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+
+  <div id="new-analysis-wrap" style="display:none; text-align:center; margin-top:1rem;">
+    <button class="btn-secondary" id="new-analysis-btn">↩ New Analysis</button>
+  </div>
+
+</main>
+
+<footer>Financial Document Analyzer · Powered by CrewAI + Groq · Queue Worker Model</footer>
+
+<script>
+const API_BASE = 'http://127.0.0.1:8000';
+
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+const fileSelected = document.getElementById('file-selected');
+const fileNameDisplay = document.getElementById('file-name-display');
+const fileRemove = document.getElementById('file-remove');
+const queryInput = document.getElementById('query-input');
+const submitBtn = document.getElementById('submit-btn');
+const statusCard = document.getElementById('status-card');
+const statusSpinner = document.getElementById('status-spinner');
+const statusTitle = document.getElementById('status-title');
+const statusSubtitle = document.getElementById('status-subtitle');
+const jobIdDisplay = document.getElementById('job-id-display');
+const progressFill = document.getElementById('progress-fill');
+const resultCard = document.getElementById('result-card');
+const resultBody = document.getElementById('result-body');
+const resultMeta = document.getElementById('result-meta');
+const errorBanner = document.getElementById('error-banner');
+const formCard = document.getElementById('form-card');
+const newAnalysisWrap = document.getElementById('new-analysis-wrap');
+const newAnalysisBtn = document.getElementById('new-analysis-btn');
+
+let selectedFile = null;
+let pollInterval = null;
+
+// File handling
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) selectFile(e.target.files[0]);
+});
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+});
+
+function selectFile(file) {
+  if (!file.name.endsWith('.pdf')) {
+    showError('Only PDF files are supported.');
+    return;
+  }
+  selectedFile = file;
+  fileNameDisplay.textContent = file.name;
+  fileSelected.classList.add('show');
+  uploadZone.style.display = 'none';
+  submitBtn.disabled = false;
+}
+
+fileRemove.addEventListener('click', () => {
+  selectedFile = null;
+  fileInput.value = '';
+  fileSelected.classList.remove('show');
+  uploadZone.style.display = 'block';
+  submitBtn.disabled = true;
+});
+
+// Submit
+submitBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  hideError();
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('query', queryInput.value.trim() || 'Analyze this financial document for investment insights');
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 0.8s linear infinite"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0"/></svg> Submitting...';
+
+  try {
+    const res = await fetch(`${API_BASE}/analyze`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+
+    jobIdDisplay.textContent = data.job_id;
+    formCard.style.display = 'none';
+    statusCard.classList.add('show');
+    startPolling(data.job_id);
+
+  } catch (err) {
+    showError(`Failed to submit: ${err.message}`);
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg> Submit for Analysis';
+  }
+});
+
+function startPolling(jobId) {
+  setStatus('STARTED');
+  pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/status/${jobId}`);
+      const data = await res.json();
+
+      if (data.status === 'SUCCESS') {
+        clearInterval(pollInterval);
+        setStatus('SUCCESS');
+        setTimeout(() => renderResult(data.result), 600);
+      } else if (data.status === 'FAILURE') {
+        clearInterval(pollInterval);
+        setStatus('FAILURE');
+        showError(`Analysis failed: ${data.error}`);
+      }
+    } catch (err) {
+      // network hiccup, keep polling
+    }
+  }, 2000);
+}
+
+function setStatus(state) {
+  if (state === 'STARTED') {
+    statusTitle.textContent = 'Analyzing document...';
+    statusSubtitle.textContent = 'CrewAI agents are processing your document';
+    progressFill.classList.add('indeterminate');
+  } else if (state === 'SUCCESS') {
+    statusTitle.textContent = 'Analysis complete';
+    statusSubtitle.textContent = 'Results are ready';
+    statusSpinner.className = 'status-spinner done';
+    progressFill.classList.remove('indeterminate');
+    progressFill.style.width = '100%';
+  } else if (state === 'FAILURE') {
+    statusTitle.textContent = 'Analysis failed';
+    statusSubtitle.textContent = 'An error occurred during processing';
+    statusSpinner.className = 'status-spinner failed';
+    progressFill.classList.remove('indeterminate');
+  }
+}
+
+function renderResult(result) {
+  statusCard.classList.remove('show');
+  resultCard.classList.add('show');
+  newAnalysisWrap.style.display = 'block';
+
+  const now = new Date().toLocaleTimeString();
+  resultMeta.textContent = `Completed at ${now}`;
+
+  const analysis = result.analysis || '';
+
+  // Parse sections from the analysis text
+  const sections = parseSections(analysis);
+
+  let html = '';
+
+  // Show query
+  html += `<div class="result-section">
+    <div class="result-section-title">Query</div>
+    <div class="result-text" style="font-style:italic;color:var(--muted)">${escapeHtml(result.query)}</div>
+  </div>`;
+
+  // Render each section
+  sections.forEach(section => {
+    html += `<div class="result-section">
+      <div class="result-section-title">${escapeHtml(section.title)}</div>
+      <div class="result-text">${escapeHtml(section.content)}</div>
+    </div>`;
+  });
+
+  // Raw toggle
+  html += `<button class="raw-toggle" onclick="toggleRaw()">▸ View raw output</button>
+  <div class="raw-output" id="raw-output">${escapeHtml(JSON.stringify(result, null, 2))}</div>`;
+
+  resultBody.innerHTML = html;
+}
+
+function parseSections(text) {
+  const lines = text.split('\n');
+  const sections = [];
+  let current = null;
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    // Detect section headers like "Company Performance Summary:"
+    if (trimmed.endsWith(':') && trimmed.length < 60 && !trimmed.startsWith('-')) {
+      if (current) sections.push(current);
+      current = { title: trimmed.slice(0, -1), content: '' };
+    } else if (current) {
+      current.content += (current.content ? '\n' : '') + line;
+    } else {
+      // Content before first header
+      if (!sections.length) {
+        current = { title: 'Summary', content: line };
+      }
+    }
+  });
+  if (current) sections.push(current);
+  return sections.filter(s => s.content.trim());
+}
+
+function toggleRaw() {
+  const raw = document.getElementById('raw-output');
+  raw.classList.toggle('show');
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.classList.add('show');
+}
+function hideError() {
+  errorBanner.classList.remove('show');
+}
+
+newAnalysisBtn.addEventListener('click', () => {
+  location.reload();
+});
+</script>
+</body>
+</html>
